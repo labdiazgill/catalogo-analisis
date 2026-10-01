@@ -14,22 +14,45 @@ const usaFtp = () => {
   return false
 }
 
-const conectar = async () => {
+const INTENTOS_FTP = 4
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms))
+// Al pegar un secreto en GitHub es fácil que quede un espacio o salto de línea; en la clave solo se quitan saltos.
+const variable = (nombre) => String(process.env[nombre] || "").trim()
+
+const conectarUnaVez = async () => {
   const cliente = new ftp.Client(60000)
-  console.log(`Conectando por FTP a ${process.env.FTP_SERVIDOR}…`)
-  await cliente.access({
-    host: process.env.FTP_SERVIDOR,
-    port: Number(process.env.FTP_PUERTO || 21),
-    user: process.env.FTP_USUARIO,
-    password: process.env.FTP_CLAVE,
-    // cPanel acepta FTP con TLS explícito; FTP_TLS=false solo si el hosting no lo soporta.
-    secure: (process.env.FTP_TLS ?? "true").toLowerCase() !== "false",
-    // En hosting compartido el certificado suele ser del servidor (p. ej. *.hostingX.com) y no del dominio:
-    // conviene usar ese nombre en FTP_SERVIDOR. FTP_TLS_VERIFICAR=false solo como último recurso.
-    secureOptions: { rejectUnauthorized: (process.env.FTP_TLS_VERIFICAR ?? "true").toLowerCase() !== "false" },
-  })
-  if (process.env.FTP_CARPETA) await cliente.ensureDir(process.env.FTP_CARPETA)
-  return cliente
+  try {
+    await cliente.access({
+      host: variable("FTP_SERVIDOR"),
+      port: Number(variable("FTP_PUERTO") || 21),
+      user: variable("FTP_USUARIO"),
+      password: String(process.env.FTP_CLAVE || "").replace(/[\r\n]+$/, ""),
+      // cPanel acepta FTP con TLS explícito; FTP_TLS=false solo si el hosting no lo soporta.
+      secure: (variable("FTP_TLS") || "true").toLowerCase() !== "false",
+      // En hosting compartido el certificado suele ser del servidor (p. ej. *.hostingX.com) y no del dominio:
+      // conviene usar ese nombre en FTP_SERVIDOR. FTP_TLS_VERIFICAR=false solo como último recurso.
+      secureOptions: { rejectUnauthorized: (variable("FTP_TLS_VERIFICAR") || "true").toLowerCase() !== "false" },
+    })
+    if (variable("FTP_CARPETA")) await cliente.ensureDir(variable("FTP_CARPETA"))
+    return cliente
+  } catch (error) {
+    cliente.close()
+    throw error
+  }
+}
+
+// Reintenta ante fallas pasajeras (DNS del runner, conexión cortada). Usuario o clave incorrectos (530) no se reintentan.
+const conectar = async () => {
+  for (let intento = 1; ; intento += 1) {
+    console.log(`Conectando por FTP a ${variable("FTP_SERVIDOR")} (intento ${intento} de ${INTENTOS_FTP})…`)
+    try {
+      return await conectarUnaVez()
+    } catch (error) {
+      if (intento >= INTENTOS_FTP || error.code === 530) throw error
+      console.log(`  Falló (${error.code || error.message}); se reintenta en ${intento * 10} s.`)
+      await esperar(intento * 10000)
+    }
+  }
 }
 
 const leerJson = (texto) => {
