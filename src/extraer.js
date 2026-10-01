@@ -125,6 +125,7 @@ const extraerDelPortal = async () => {
     // Zen muestra los errores del servidor con alert(); sin esto la página quedaría bloqueada.
     pagina.on("dialog", (dialogo) => dialogo.dismiss().catch(() => undefined))
 
+    console.log(`Abriendo el portal de Shift: ${URL_PORTAL}`)
     await pagina.goto(URL_PORTAL, { waitUntil: "networkidle0", timeout: ESPERA_MS })
     await pagina.waitForFunction(
       () =>
@@ -152,7 +153,9 @@ const extraerDelPortal = async () => {
     }
 
     const ids = [...alternativos.keys()]
+    console.log(`Lista del portal: ${filas.length} filas, ${ids.length} exámenes. Leyendo nombres oficiales…`)
     const oficiales = await nombresOficiales(pagina, ids)
+    console.log("Leyendo instrucciones…")
     const detalles = await instrucciones(pagina, ids)
 
     return ids.map((id) => {

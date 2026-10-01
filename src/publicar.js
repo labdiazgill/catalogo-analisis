@@ -16,6 +16,7 @@ const usaFtp = () => {
 
 const conectar = async () => {
   const cliente = new ftp.Client(60000)
+  console.log(`Conectando por FTP a ${process.env.FTP_SERVIDOR}…`)
   await cliente.access({
     host: process.env.FTP_SERVIDOR,
     port: Number(process.env.FTP_PUERTO || 21),
