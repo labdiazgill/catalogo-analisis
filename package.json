@@ -1,0 +1,17 @@
+{
+  "name": "catalogo-analisis",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Publica el catálogo de análisis de Díaz Gill (copiado del portal de Shift) como JSON en el hosting de la web",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.3.1",
+    "puppeteer-core": "^24.43.1"
+  }
+}

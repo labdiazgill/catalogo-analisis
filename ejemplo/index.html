@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Análisis — ejemplo de uso de los datos</title>
+  <!-- Página de prueba: muestra cómo leer analisis.json. No es el diseño de la web. -->
+  <style>
+    :root { --color: #0a5ca8; --borde: #dde3ea; --tenue: #f3f6f9; --suave: #5f6b7a; }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 24px 16px; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2933; background: #fff; }
+    main { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 24px; margin: 0 0 16px; }
+    input { width: 100%; font: inherit; font-size: 16px; padding: 12px 14px; border: 1px solid var(--borde); border-radius: 10px; }
+    .letras { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; }
+    .letras button { font: inherit; font-size: 13px; min-width: 32px; height: 32px; border: 1px solid var(--borde); border-radius: 8px; background: #fff; cursor: pointer; }
+    .letras button[aria-pressed="true"] { background: var(--color); border-color: var(--color); color: #fff; }
+    .letras button:disabled { opacity: .35; cursor: default; }
+    .info { color: var(--suave); font-size: 13px; }
+    details { border: 1px solid var(--borde); border-radius: 10px; margin-top: 8px; }
+    summary { padding: 12px 14px; cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    summary b { color: var(--color); font-size: 12px; min-width: 56px; }
+    .chip { font-size: 12px; color: var(--suave); background: var(--tenue); border-radius: 999px; padding: 2px 9px; }
+    .ficha { padding: 0 14px 14px; }
+    .ficha h3 { font-size: 14px; margin: 14px 0 4px; }
+    .ficha p { margin: 0; white-space: pre-line; line-height: 1.5; font-size: 14px; }
+    #mas { display: block; margin: 16px auto 0; font: inherit; padding: 10px 18px; border-radius: 10px; border: 1px solid var(--color); color: var(--color); background: #fff; cursor: pointer; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Análisis</h1>
+  <input id="buscar" type="search" placeholder="Buscar por nombre, sigla o sinónimo…" aria-label="Buscar análisis">
+  <div class="letras" id="letras" role="group" aria-label="Filtrar por letra"></div>
+  <p class="info" id="info" aria-live="polite">Cargando…</p>
+  <div id="lista"></div>
+  <button id="mas" type="button" hidden>Ver más</button>
+</main>
+<script>
+  // En una computadora (localhost) se usa el archivo generado por `npm start`; en otro caso, el publicado.
+  var URL_DATOS = /^(localhost|127\.0\.0\.1)$/.test(location.hostname)
+    ? "../salida/analisis.json"
+    : "https://diazgill.com.py/analisis/analisis.json"
+  var POR_PAGINA = 40
+
+  var normalizar = function (t) { return String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase() }
+  var $ = function (id) { return document.getElementById(id) }
+  var el = function (tag, texto, clase) { var n = document.createElement(tag); if (texto != null) n.textContent = texto; if (clase) n.className = clase; return n }
+
+  var examenes = [], filtrados = [], mostrados = 0, letra = ""
+
+  fetch(URL_DATOS)
+    .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json() })
+    .then(function (catalogo) {
+      examenes = catalogo.examenes.map(function (e) {
+        e._busqueda = normalizar([e.sigla, e.nombre].concat(e.sinonimos).join(" "))
+        return e
+      })
+      armarLetras()
+      filtrar()
+      $("info").dataset.fecha = "Actualizado el " + new Date(catalogo.actualizado_en).toLocaleString("es-PY", { dateStyle: "long", timeStyle: "short" })
+      contar()
+    })
+    .catch(function () { $("info").textContent = "No pudimos cargar el listado de análisis." })
+
+  function armarLetras() {
+    var conDatos = {}
+    examenes.forEach(function (e) { conDatos[e.inicial] = true })
+    ;[""].concat("ABCDEFGHIJKLMNOPQRSTUVWXYZ#".split("")).forEach(function (l) {
+      var b = el("button", l || "Todos")
+      b.type = "button"
+      b.disabled = l !== "" && !conDatos[l]
+      b.setAttribute("aria-pressed", l === letra)
+      b.onclick = function () {
+        letra = l
+        $("buscar").value = ""
+        Array.prototype.forEach.call($("letras").children, function (x) { x.setAttribute("aria-pressed", x === b) })
+        filtrar()
+      }
+      $("letras").appendChild(b)
+    })
+  }
+
+  var espera
+  $("buscar").addEventListener("input", function () { clearTimeout(espera); espera = setTimeout(filtrar, 200) })
+  $("mas").onclick = function () { pintar(false) }
+
+  function filtrar() {
+    var palabras = normalizar($("buscar").value).split(/\s+/).filter(Boolean)
+    filtrados = examenes.filter(function (e) {
+      if (letra && !palabras.length && e.inicial !== letra) return false
+      return palabras.every(function (p) { return e._busqueda.indexOf(p) >= 0 })
+    })
+    pintar(true)
+  }
+
+  function pintar(desdeCero) {
+    if (desdeCero) { $("lista").textContent = ""; mostrados = 0 }
+    filtrados.slice(mostrados, mostrados + POR_PAGINA).forEach(function (e) { $("lista").appendChild(item(e)) })
+    mostrados = Math.min(mostrados + POR_PAGINA, filtrados.length)
+    $("mas").hidden = mostrados >= filtrados.length
+    contar()
+  }
+
+  function contar() {
+    if (!examenes.length) return
+    $("info").textContent = filtrados.length + " análisis · " + ($("info").dataset.fecha || "")
+  }
+
+  function item(e) {
+    var d = el("details"), s = el("summary")
+    s.appendChild(el("b", e.sigla))
+    s.appendChild(el("span", e.nombre))
+    if (e.ayuno) s.appendChild(el("span", "Ayuno: " + e.ayuno, "chip"))
+    if (e.plazo) s.appendChild(el("span", "Entrega: " + e.plazo, "chip"))
+    d.appendChild(s)
+    var f = el("div", null, "ficha")
+    var bloque = function (titulo, texto) { if (!texto) return; f.appendChild(el("h3", titulo)); f.appendChild(el("p", texto)) }
+    bloque("Muestra", e.muestra.join(", "))
+    bloque("Instrucciones para el paciente", e.instrucciones.join("\n"))
+    e.informacion.forEach(function (i) { bloque(i.titulo || "Información", i.texto) })
+    bloque("También conocido como", e.sinonimos.join(" · "))
+    if (!f.children.length) f.appendChild(el("p", "Consultá las indicaciones con nuestro equipo."))
+    d.appendChild(f)
+    return d
+  }
+</script>
+</body>
+</html>

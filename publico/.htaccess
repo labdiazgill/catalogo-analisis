@@ -1,0 +1,27 @@
+# Se publica junto con analisis.json en la carpeta del cPanel.
+Options -Indexes
+
+# Corta las reglas de reescritura del .htaccess de public_html (WordPress, redirecciones) para esta carpeta.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+</IfModule>
+
+AddType application/json .json
+AddDefaultCharset utf-8
+
+<IfModule mod_headers.c>
+  # Permite leer los datos desde cualquier sitio (la web, entornos de prueba del diseñador).
+  Header set Access-Control-Allow-Origin "*"
+  <FilesMatch "\.json$">
+    Header set Cache-Control "public, max-age=300"
+  </FilesMatch>
+</IfModule>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE application/json
+</IfModule>
+
+# El archivo temporal de la subida no se sirve.
+<FilesMatch "\.subiendo$">
+  Require all denied
+</FilesMatch>

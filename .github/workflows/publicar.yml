@@ -1,0 +1,50 @@
+name: Publicar catálogo de análisis
+
+on:
+  schedule:
+    # Cada 15 minutos (GitHub puede demorar algunas ejecuciones en horas de mucha carga).
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+# Nunca dos publicaciones a la vez; si una se atrasa, la siguiente espera.
+concurrency:
+  group: publicar-catalogo
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Copiar desde Shift y subir al hosting
+        run: npm start
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          FTP_SERVIDOR: ${{ secrets.FTP_SERVIDOR }}
+          FTP_USUARIO: ${{ secrets.FTP_USUARIO }}
+          FTP_CLAVE: ${{ secrets.FTP_CLAVE }}
+          FTP_PUERTO: ${{ vars.FTP_PUERTO }}
+          FTP_CARPETA: ${{ vars.FTP_CARPETA }}
+          FTP_TLS: ${{ vars.FTP_TLS }}
+          FTP_TLS_VERIFICAR: ${{ vars.FTP_TLS_VERIFICAR }}
+
+      # GitHub desactiva las tareas programadas de un repositorio sin actividad durante 60 días.
+      # Volver a habilitar el workflow reinicia ese plazo.
+      - name: Mantener activa la tarea programada
+        if: always()
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/publicar.yml/enable"
+        env:
+          GH_TOKEN: ${{ github.token }}
