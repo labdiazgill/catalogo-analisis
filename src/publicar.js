@@ -7,7 +7,12 @@ const ARCHIVO = "analisis.json"
 const CARPETA_LOCAL = path.resolve(__dirname, "..", "salida")
 const HTACCESS = path.resolve(__dirname, "..", "publico", ".htaccess")
 
-const usaFtp = () => Boolean(process.env.FTP_SERVIDOR)
+const usaFtp = () => {
+  if (process.env.FTP_SERVIDOR) return true
+  // En GitHub Actions, sin FTP la ejecución terminaría bien sin publicar nada.
+  if (process.env.CI) throw new Error("Faltan los secretos FTP_SERVIDOR, FTP_USUARIO y FTP_CLAVE del repositorio.")
+  return false
+}
 
 const conectar = async () => {
   const cliente = new ftp.Client(60000)
